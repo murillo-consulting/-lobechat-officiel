@@ -7,7 +7,8 @@ permissions:
 
 on:
   schedule:
-    - cron: '0 */6 * * *' # every 6 hours
+    # Run at 04:00 Europe/Paris year-round (02:00 UTC in summer, 03:00 UTC in winter).
+    - cron: '0 2,3 * * *'
   workflow_dispatch:
 
 jobs:
@@ -17,9 +18,23 @@ jobs:
     if: ${{ github.event.repository.fork }}
 
     steps:
+      - name: Check Paris local time
+        id: local_time
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          elif [ "$(TZ=Europe/Paris date +%H)" = "04" ]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - uses: actions/checkout@v6
+        if: steps.local_time.outputs.run == 'true'
 
       - name: Sync upstream changes
+        if: steps.local_time.outputs.run == 'true'
         id: sync
         uses: aormsby/Fork-Sync-With-Upstream-action@v3.4
         with:
