@@ -7,7 +7,9 @@ permissions:
 
 on:
   schedule:
-    # Run at 04:00 Europe/Paris year-round (02:00 UTC in summer, 03:00 UTC in winter).
+    # Candidate UTC times for 02:30 and 04:00 Europe/Paris across DST.
+    # The local-time gate below ensures the sync runs only at 02:30 or 04:00 Paris time.
+    - cron: '30 0,1 * * *'
     - cron: '0 2,3 * * *'
   workflow_dispatch:
 
@@ -24,10 +26,13 @@ jobs:
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             echo "run=true" >> "$GITHUB_OUTPUT"
-          elif [ "$(TZ=Europe/Paris date +%H)" = "04" ]; then
-            echo "run=true" >> "$GITHUB_OUTPUT"
           else
-            echo "run=false" >> "$GITHUB_OUTPUT"
+            PARIS_TIME="$(TZ=Europe/Paris date +%H:%M)"
+            if [ "$PARIS_TIME" = "02:30" ] || [ "$PARIS_TIME" = "04:00" ]; then
+              echo "run=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "run=false" >> "$GITHUB_OUTPUT"
+            fi
           fi
 
       - uses: actions/checkout@v6
