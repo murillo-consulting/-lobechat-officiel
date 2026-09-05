@@ -1,4 +1,5 @@
 import { TaskIdentifier as TaskSkillIdentifier } from '@lobechat/builtin-skills';
+import { AcceptanceEvidenceIdentifier } from '@lobechat/builtin-tool-acceptance-evidence';
 import { BriefIdentifier } from '@lobechat/builtin-tool-brief';
 import { INBOX_SESSION_ID } from '@lobechat/const';
 import type { ExecAgentResult, TaskItem, TaskRunTrigger } from '@lobechat/types';
@@ -21,6 +22,8 @@ const log = debug('task-runner');
 export interface RunTaskParams {
   continueTopicId?: string;
   extraPrompt?: string;
+  /** Optional per-operation cap. Omitted means the agent runtime remains uncapped. */
+  maxSteps?: number;
   taskId: string;
   /**
    * What triggered this run. Defaults to `'manual'` — the ad-hoc "run now"
@@ -66,7 +69,13 @@ export class TaskRunnerService {
   }
 
   async runTask(params: RunTaskParams): Promise<RunTaskResult> {
-    const { taskId: idOrIdentifier, continueTopicId, extraPrompt, trigger = 'manual' } = params;
+    const {
+      taskId: idOrIdentifier,
+      continueTopicId,
+      extraPrompt,
+      maxSteps,
+      trigger = 'manual',
+    } = params;
 
     const task = await this.taskModel.resolve(idOrIdentifier);
     if (!task) {
@@ -88,7 +97,12 @@ export class TaskRunnerService {
             message: 'Failed to resolve fallback inbox agent for task',
           });
         }
-        await this.taskModel.update(task.id, { assigneeAgentId: inboxAgent.id });
+        // A human-assigned task still executes via the inbox agent, but the
+        // fallback must stay ephemeral — persisting it would silently replace
+        // the member assignment on the first run.
+        if (!task.assigneeUserId) {
+          await this.taskModel.update(task.id, { assigneeAgentId: inboxAgent.id });
+        }
         task.assigneeAgentId = inboxAgent.id;
       }
 
@@ -120,7 +134,11 @@ export class TaskRunnerService {
         }
       }
 
-      const { fileIds: attachmentFileIds, prompt } = await buildTaskPrompt(
+      const {
+        acceptanceEnabled,
+        fileIds: attachmentFileIds,
+        prompt,
+      } = await buildTaskPrompt(
         task,
         {
           briefModel: this.briefModel,
@@ -171,6 +189,11 @@ export class TaskRunnerService {
       if (briefMode === 'agent' && !reviewConfig?.enabled && checkpoint.onAgentRequest !== false) {
         pluginIds.push(BriefIdentifier);
       }
+      // The Acceptance runs inside the Task, so the builder needs listCriteria +
+      // submitEvidence for the whole run — not only in the post-run evidence
+      // turn, which mounts this tool exclusively and therefore can only ever
+      // restate text it already wrote.
+      if (acceptanceEnabled) pluginIds.push(AcceptanceEvidenceIdentifier);
 
       const taskConfig = (task.config ?? {}) as Record<string, unknown>;
 
@@ -222,6 +245,7 @@ export class TaskRunnerService {
           },
         ],
         ...(attachmentFileIds.length > 0 ? { fileIds: attachmentFileIds } : {}),
+        ...(maxSteps ? { maxSteps } : {}),
         prompt,
         taskId: task.id,
         title: extraPrompt ? extraPrompt.slice(0, 100) : task.name || task.identifier,
@@ -302,7 +326,17 @@ export class TaskRunnerService {
    *   with the error recorded — the same fallback used by the runner itself.
    */
   async cascadeOnCompletion(completedTaskId: string): Promise<CascadeResult> {
-    const unlocked = await this.taskModel.getUnlockedTasks(completedTaskId);
+    return this.cascadeOnCompletionMany([completedTaskId]);
+  }
+
+  /**
+   * Batched variant of {@link cascadeOnCompletion} for family-wide status
+   * cascades: dependents are discovered across all completed ids in one pass,
+   * so completing N tasks costs a constant number of discovery queries instead
+   * of N dependency walks.
+   */
+  async cascadeOnCompletionMany(completedTaskIds: string[]): Promise<CascadeResult> {
+    const unlocked = await this.taskModel.getUnlockedTasksForMany(completedTaskIds);
     if (unlocked.length === 0) return TaskRunnerService.cascadeEmpty();
 
     const result: CascadeResult = { failed: [], paused: [], started: [] };

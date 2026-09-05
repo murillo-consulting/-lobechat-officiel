@@ -1,8 +1,7 @@
 import { isDesktop } from '@lobechat/const';
 import { getActivePluginIds, type LobeAgentConfig } from '@lobechat/types';
-import { ActionIcon, DropdownMenu, Flexbox, Icon } from '@lobehub/ui';
-import { confirmModal, type ModalInstance } from '@lobehub/ui/base-ui';
-import { toast } from '@lobehub/ui/base-ui';
+import { DropdownMenu, Flexbox, Icon } from '@lobehub/ui';
+import { ActionIcon, confirmModal, type ModalInstance, toast } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
 import isEqual from 'fast-deep-equal';
 import type { TFunction } from 'i18next';
@@ -11,6 +10,7 @@ import {
   Download,
   MoreHorizontal,
   Settings2Icon,
+  Share2Icon,
   Trash,
   UserRound,
   UsersIcon,
@@ -19,12 +19,14 @@ import { memo, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useAgentTransferMenuItem } from '@/business/client/hooks/useAgentTransferMenuItem';
+import { useAgentTransferToMemberMenuItem } from '@/business/client/hooks/useAgentTransferToMemberMenuItem';
 import { useAuthorInfo } from '@/business/client/hooks/useAuthorInfo';
 import { useBusinessAgentImportMenuItem } from '@/business/client/hooks/useBusinessAgentImportMenuItem';
 import { useHasActiveWorkspace } from '@/business/client/hooks/useHasActiveWorkspace';
 import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
 import AgentBreadcrumb from '@/features/AgentBreadcrumb';
 import AgentProfileTabs, { AGENT_PROFILE_TABS_CENTER_STYLE } from '@/features/AgentProfileTabs';
+import { useAgentShareSupported } from '@/features/AgentShareSettings/useAgentShareSupported';
 import NavHeader from '@/features/NavHeader';
 import { formatPageEditorInfoTime } from '@/features/PageEditor/formatPageEditorInfoTime';
 import AccessLevelTag from '@/features/ResourcePermission/AccessLevelTag';
@@ -37,6 +39,7 @@ import { agentSelectors, builtinAgentSelectors } from '@/store/agent/selectors';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 import { useHomeStore } from '@/store/home';
+import { getDeleteErrorMessageKey } from '@/utils/forbiddenError';
 import { sanitizeFileName } from '@/utils/sanitizeFileName';
 
 import { openAgentSettingsModal } from '../AgentSettings';
@@ -45,7 +48,10 @@ import AgentForkTag from './AgentForkTag';
 import AgentStatusTag from './AgentStatusTag';
 import AgentVersionReviewTag from './AgentVersionReviewTag';
 
-type HeaderTranslation = TFunction<readonly ['setting', 'chat', 'file', 'common'], undefined>;
+type HeaderTranslation = TFunction<
+  readonly ['setting', 'chat', 'file', 'common', 'agent'],
+  undefined
+>;
 
 const buildAgentProfileMarkdown = (params: {
   description?: string;
@@ -97,7 +103,7 @@ const buildAgentProfileMarkdown = (params: {
 };
 
 const Header = memo(() => {
-  const { i18n, t } = useTranslation(['setting', 'chat', 'file', 'common']);
+  const { i18n, t } = useTranslation(['setting', 'chat', 'file', 'common', 'agent']);
   const dateLocale = i18n?.resolvedLanguage || i18n?.language;
   const navigate = useWorkspaceAwareNavigate();
 
@@ -159,7 +165,12 @@ const Header = memo(() => {
     confirmModal({
       okButtonProps: { danger: true },
       onOk: async () => {
-        await removeAgent(activeAgentId);
+        try {
+          await removeAgent(activeAgentId);
+        } catch (error) {
+          toast.error(t(getDeleteErrorMessageKey(error), { ns: 'common' }));
+          return;
+        }
         toast.success(t('confirmRemoveSessionSuccess', { ns: 'chat' }));
         navigate('/');
       },
@@ -227,6 +238,8 @@ const Header = memo(() => {
 
   const importMenuItem = useBusinessAgentImportMenuItem(activeAgentId ?? undefined);
   const transferMenuItems = useAgentTransferMenuItem(activeAgentId ?? undefined, meta);
+  // Ownership handover to a workspace member — separate from the scope moves.
+  const transferToMemberItem = useAgentTransferToMemberMenuItem(activeAgentId ?? undefined, meta);
 
   const settingsModalRef = useRef<ModalInstance | null>(null);
   useEffect(
@@ -236,6 +249,16 @@ const Header = memo(() => {
     },
     [],
   );
+
+  const { visible: shareVisible } = useAgentShareSupported(activeAgentId);
+  const canShareAgent = shareVisible === true && canConfigure;
+
+  // Share settings are a sibling tab of the profile group, not a popup — the
+  // shortcut just jumps to that tab.
+  const handleOpenShare = useCallback(() => {
+    if (!activeAgentId) return;
+    navigate(`/agent/${activeAgentId}/share`);
+  }, [activeAgentId, navigate]);
 
   const menuItems = useMemo(() => {
     const businessTransferMenuItems = transferMenuItems ?? [];
@@ -285,8 +308,11 @@ const Header = memo(() => {
       },
       importMenuItem ? { type: 'divider' as const } : null,
       importMenuItem,
-      businessTransferMenuItems.length > 0 ? { type: 'divider' as const } : null,
+      businessTransferMenuItems.length > 0 || transferToMemberItem
+        ? { type: 'divider' as const }
+        : null,
       ...businessTransferMenuItems,
+      transferToMemberItem,
       canManage ? { type: 'divider' as const } : null,
       canManage
         ? {
@@ -339,27 +365,13 @@ const Header = memo(() => {
     t,
     importMenuItem,
     transferMenuItems,
+    transferToMemberItem,
   ]);
 
   return (
+    // `relative` anchors the absolutely-centered switcher below.
     <NavHeader
       style={{ position: 'relative' }}
-      right={
-        <Flexbox horizontal align={'center'} gap={4}>
-          <DropdownMenu items={menuItems}>
-            <ActionIcon icon={MoreHorizontal} size={DESKTOP_HEADER_ICON_SMALL_SIZE} />
-          </DropdownMenu>
-          {!isHeterogeneous && isStatusInit && !lockedByOther && !lockPending && (
-            <ToggleRightPanelButton
-              expand={showAgentBuilderPanel}
-              icon={BotMessageSquareIcon}
-              showActive={true}
-              onToggle={() => toggleAgentBuilderPanel()}
-            />
-          )}
-        </Flexbox>
-      }
-      // `relative` anchors the absolutely-centered switcher below.
       left={
         <Flexbox horizontal align={'center'} gap={8}>
           {/* No section title — the Segmented beside it names the current tab. */}
@@ -371,6 +383,30 @@ const Header = memo(() => {
             resourceId={showPermissionsEntry ? (activeAgentId ?? undefined) : undefined}
             resourceType={'agent'}
           />
+        </Flexbox>
+      }
+      right={
+        <Flexbox horizontal align={'center'} gap={4}>
+          {canShareAgent && (
+            <ActionIcon
+              icon={Share2Icon}
+              size={DESKTOP_HEADER_ICON_SMALL_SIZE}
+              title={t('share.entry', { ns: 'agent' })}
+              tooltipProps={{ placement: 'bottom' }}
+              onClick={handleOpenShare}
+            />
+          )}
+          <DropdownMenu items={menuItems}>
+            <ActionIcon icon={MoreHorizontal} size={DESKTOP_HEADER_ICON_SMALL_SIZE} />
+          </DropdownMenu>
+          {!isHeterogeneous && isStatusInit && !lockedByOther && !lockPending && (
+            <ToggleRightPanelButton
+              expand={showAgentBuilderPanel}
+              icon={BotMessageSquareIcon}
+              showActive={true}
+              onToggle={() => toggleAgentBuilderPanel()}
+            />
+          )}
         </Flexbox>
       }
       styles={{

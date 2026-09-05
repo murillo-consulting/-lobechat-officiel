@@ -138,6 +138,8 @@ export interface ProjectFileIndexResult {
 }
 
 export interface ProjectFileSearchParams extends ProjectFileIndexParams {
+  changedOnly?: boolean;
+  excludeIgnored?: boolean;
   limit?: number;
   query: string;
 }
@@ -238,10 +240,11 @@ export interface DeviceControlDeps extends SkillDirectoryDeps, WorkspaceScanDeps
  * Kept local so device-control remains a leaf package with no app/type-layer dependency.
  */
 export interface ListHeterogeneousAgentModelsParams {
+  args?: string[];
   command?: string;
   cwd?: string;
   env?: Record<string, string>;
-  type: 'opencode' | 'pi' | 'qoder';
+  type: 'codebuddy' | 'cursor' | 'droid' | 'grok-build' | 'opencode' | 'pi' | 'qoder' | 'trae';
 }
 
 export interface HeterogeneousAgentModelCatalogItem {

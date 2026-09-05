@@ -23,15 +23,16 @@ import type { BotReplyLocale, PlatformClient } from './platforms';
 import {
   getBotReplyLocale,
   getStepReactionEmoji,
+  platformFromThreadId,
   platformRegistry,
   RECEIVED_REACTION_EMOJI,
   THINKING_REACTION_EMOJI,
 } from './platforms';
 import { clearReactionState, saveReactionState } from './reactionState';
 import { buildRecentChannelHistory } from './recentChannelHistory';
+import { renderThrownAgentError } from './renderThrownError';
 import {
   renderAgentError,
-  renderError,
   renderErrorWithDetails,
   renderFinalReply,
   renderStart,
@@ -147,6 +148,12 @@ interface DiscordChannelContext {
 
 interface ThreadState {
   channelContext?: DiscordChannelContext;
+  /**
+   * Per-conversation execution mode set via the `/mode` command. When present
+   * it overrides the agent's own `chatConfig.toolMode` for every run in this
+   * thread; absent means "follow the agent's configured default".
+   */
+  toolMode?: 'agent' | 'chat';
   topicId?: string;
 }
 
@@ -407,10 +414,14 @@ export class AgentBridgeService {
 
     AgentBridgeService.clearActiveThread(thread.id);
 
+    // Classify before rendering so a startup failure lands on curated copy
+    // (harness / provider / user tier) instead of a bare "Agent Execution
+    // Failed" that tells the user nothing — especially when the run died
+    // before it had an operation id to show.
     const errorContent = {
       markdown: stopped
         ? renderStopped(errorMessage, replyLocale)
-        : renderError(operationId, replyLocale),
+        : renderThrownAgentError(error, operationId, replyLocale),
     };
 
     if (progressMessage) {
@@ -524,7 +535,7 @@ export class AgentBridgeService {
         const operationId = AgentBridgeService.activeOperations.get(thread.id);
         log('handleMention error: operationId=%s, %O', operationId, error);
         try {
-          await thread.post({ markdown: renderError(operationId, replyLocale) });
+          await thread.post({ markdown: renderThrownAgentError(error, operationId, replyLocale) });
         } catch (postError) {
           log('handleMention: failed to post error message: %O', postError);
         }
@@ -578,24 +589,49 @@ export class AgentBridgeService {
       return;
     }
 
-    // Check if the topic is stale (no activity for 4+ hours).
-    // If so, clear the cached topicId and start a fresh conversation.
+    // Validate the cached topic before reusing it. Three reset triggers, all
+    // resolved the same way — clear the cached topicId and start a fresh
+    // conversation via handleMention:
+    //   1. the topic row is gone (deleted directly, cascade-deleted with its
+    //      agent, or out of the current user/workspace ownership scope after a
+    //      scope switch) — running with it would fail at the topic-start
+    //      reservation with a bare "Agent Execution Failed" and no way out;
+    //   2. the topic belongs to a different agent than the active one — the
+    //      user switched agents via /agents, so continuing the old agent's
+    //      topic would be wrong even when it still exists;
+    //   3. the topic is stale (no activity for 4+ hours).
     // Wrapped in try/catch so transient DB errors fall through to the
     // existing topicId rather than rejecting before the guarded section.
     try {
       const topicModel = new TopicModel(this.db, this.userId, this.workspaceId);
       const existingTopic = await topicModel.findById(topicId);
-      if (existingTopic) {
-        const elapsed = Date.now() - new Date(existingTopic.updatedAt).getTime();
-        if (elapsed > TOPIC_STALE_THRESHOLD) {
-          log(
-            'handleSubscribedMessage: topic=%s is stale (%.1fh since last activity), creating new topic',
-            topicId,
-            elapsed / (60 * 60 * 1000),
-          );
-          await thread.setState({ ...threadState, topicId: undefined });
-          return this.handleMention(thread, message, opts);
-        }
+      if (!existingTopic) {
+        log(
+          'handleSubscribedMessage: cached topic=%s no longer exists, creating new topic',
+          topicId,
+        );
+        await thread.setState({ ...threadState, topicId: undefined });
+        return this.handleMention(thread, message, opts);
+      }
+      if (existingTopic.agentId && existingTopic.agentId !== agentId) {
+        log(
+          'handleSubscribedMessage: cached topic=%s belongs to agent=%s but active agent is %s, creating new topic',
+          topicId,
+          existingTopic.agentId,
+          agentId,
+        );
+        await thread.setState({ ...threadState, topicId: undefined });
+        return this.handleMention(thread, message, opts);
+      }
+      const elapsed = Date.now() - new Date(existingTopic.updatedAt).getTime();
+      if (elapsed > TOPIC_STALE_THRESHOLD) {
+        log(
+          'handleSubscribedMessage: topic=%s is stale (%.1fh since last activity), creating new topic',
+          topicId,
+          elapsed / (60 * 60 * 1000),
+        );
+        await thread.setState({ ...threadState, topicId: undefined });
+        return this.handleMention(thread, message, opts);
       }
     } catch (error) {
       log(
@@ -652,7 +688,11 @@ export class AgentBridgeService {
         const isFKViolation =
           cause?.code === PG_FOREIGN_KEY_VIOLATION && cause?.constraint?.includes('topic_id');
         const errMsg = error instanceof Error ? error.message : String(error);
-        if (isFKViolation) {
+        // "Topic not found" comes from the topic-start reservation when the
+        // cached topic row is gone (same stale-topic class as the FK
+        // violation, just surfaced from a different layer).
+        const isStaleTopic = isFKViolation || errMsg.includes('Topic not found');
+        if (isStaleTopic) {
           log(
             'handleSubscribedMessage: stale topicId=%s, resetting and retrying as new mention',
             topicId,
@@ -764,6 +804,17 @@ export class AgentBridgeService {
       }
     }
 
+    // Per-conversation mode switch (`/mode agent|chat`). Read from thread
+    // state on every run so both fresh mentions and follow-ups honour it;
+    // best-effort — a transient state-store error falls back to the agent's
+    // configured default rather than blocking the reply.
+    let toolModeOverride: ThreadState['toolMode'];
+    try {
+      toolModeOverride = (await thread.state)?.toolMode;
+    } catch (error) {
+      log('executeWithCallback: failed to read thread state for toolMode: %O', error);
+    }
+
     const queueMode = isQueueAgentRuntimeEnabled();
     const aiAgentService = new AiAgentService(this.db, this.userId, {
       workspaceId: this.workspaceId,
@@ -790,7 +841,8 @@ export class AgentBridgeService {
     // gateway typing makes ack redundant as user feedback.
     // For platforms without typing support (no triggerTyping on messenger), the
     // gateway typing is invisible, so we still send an ack message as user feedback.
-    const gwClient = getMessageGatewayClient();
+    const botPlatform = platformFromThreadId(botContext?.platformThreadId);
+    const gwClient = getMessageGatewayClient(botPlatform);
     const platformSupportsTyping =
       client && botContext?.platformThreadId
         ? !!client.getMessenger(botContext.platformThreadId).triggerTyping
@@ -808,7 +860,7 @@ export class AgentBridgeService {
       // Start gateway typing immediately so the alarm keeps it alive through
       // the entire AI generation (platform typing expires after ~10s).
       if (botContext?.platformThreadId && botContext?.applicationId) {
-        const platform = botContext.platformThreadId.split(':')[0];
+        const platform = platformFromThreadId(botContext.platformThreadId);
         try {
           if (botContext.messengerInstallationKey) {
             // Messenger run: shard typing by `(platform, lobeUserId)` so each
@@ -928,6 +980,7 @@ export class AgentBridgeService {
         progressMessage,
         prompt,
         replyLocale,
+        toolModeOverride,
         topicId,
         trigger,
         webhookBody,
@@ -949,6 +1002,7 @@ export class AgentBridgeService {
       progressMessage,
       prompt,
       replyLocale,
+      toolModeOverride,
       topicId,
       trigger,
       userMessage,
@@ -974,6 +1028,7 @@ export class AgentBridgeService {
       progressMessage?: SentMessage;
       prompt: string;
       replyLocale: BotReplyLocale;
+      toolModeOverride?: ThreadState['toolMode'];
       topicId?: string;
       trigger?: string;
       webhookBody: Record<string, unknown>;
@@ -990,6 +1045,7 @@ export class AgentBridgeService {
       progressMessage,
       prompt,
       replyLocale,
+      toolModeOverride,
       topicId,
       trigger,
       webhookBody,
@@ -1049,6 +1105,7 @@ export class AgentBridgeService {
           prompt,
           signal,
           title: '',
+          toolModeOverride,
           trigger,
           userInterventionConfig: { approvalMode: 'headless' },
         }),
@@ -1058,6 +1115,14 @@ export class AgentBridgeService {
 
       const errMsg = error instanceof Error ? error.message : String(error);
       if (errMsg.includes('Failed query') && errMsg.includes('topic_id')) {
+        throw error;
+      }
+      // A cached topicId whose row vanished between the pre-flight check and
+      // the topic-start reservation (delete race) surfaces as a plain
+      // "Topic not found" error. Rethrow so handleSubscribedMessage can clear
+      // the stale topicId and retry as a fresh mention instead of posting a
+      // bare "Agent Execution Failed" with no operation id.
+      if (errMsg.includes('Topic not found')) {
         throw error;
       }
 
@@ -1131,6 +1196,7 @@ export class AgentBridgeService {
       progressMessage?: SentMessage;
       prompt: string;
       replyLocale: BotReplyLocale;
+      toolModeOverride?: ThreadState['toolMode'];
       topicId?: string;
       trigger?: string;
       userMessage?: Message;
@@ -1150,6 +1216,7 @@ export class AgentBridgeService {
       gatewayConnectionId,
       prompt,
       replyLocale,
+      toolModeOverride,
       topicId,
       trigger,
       userMessage,
@@ -1166,7 +1233,7 @@ export class AgentBridgeService {
 
     const stopGatewayTyping = () => {
       if (gatewayConnectionId && botContext?.platformThreadId) {
-        const gwClient = getMessageGatewayClient();
+        const gwClient = getMessageGatewayClient(platformFromThreadId(botContext.platformThreadId));
         gwClient.stopTyping(gatewayConnectionId, botContext.platformThreadId).catch((err) => {
           log('executeWithCallback[local]: gateway stopTyping failed: %O', err);
         });
@@ -1447,6 +1514,7 @@ export class AgentBridgeService {
           prompt,
           signal,
           title: '',
+          toolModeOverride,
           trigger,
           userInterventionConfig: { approvalMode: 'headless' },
         }),
@@ -1467,7 +1535,7 @@ export class AgentBridgeService {
             if (progressMessage) {
               try {
                 await progressMessage.edit({
-                  markdown: renderError(result.operationId, replyLocale),
+                  markdown: renderThrownAgentError(result.error, result.operationId, replyLocale),
                 });
               } catch (error) {
                 log('executeWithCallback[local]: failed to edit startup error: %O', error);
@@ -1520,11 +1588,16 @@ export class AgentBridgeService {
 
           log('executeWithCallback[local]: startup error: %s', extractErrorMessage(error));
 
-          // Stale topic_id FK violation: propagate so handleSubscribedMessage can
-          // clear thread state and retry as a fresh mention. Queue mode does the
-          // same bailout in executeWithHooksQueueMode.
+          // Stale cached topic: propagate so handleSubscribedMessage can clear
+          // thread state and retry as a fresh mention. Queue mode does the same
+          // bailout in executeWithHooksQueueMode — both the FK-violation form
+          // ("Failed query" on topic_id) and the topic-start reservation form
+          // ("Topic not found", a delete race after the pre-flight check).
           const errMsg = error instanceof Error ? error.message : String(error);
-          if (errMsg.includes('Failed query') && errMsg.includes('topic_id')) {
+          if (
+            (errMsg.includes('Failed query') && errMsg.includes('topic_id')) ||
+            errMsg.includes('Topic not found')
+          ) {
             stopGatewayTyping();
             reject(error);
             return;
@@ -1539,7 +1612,7 @@ export class AgentBridgeService {
           if (progressMessage) {
             try {
               await progressMessage.edit({
-                markdown: renderError(fallbackOperationId, replyLocale),
+                markdown: renderThrownAgentError(error, fallbackOperationId, replyLocale),
               });
             } catch (editError) {
               log('executeWithCallback[local]: failed to edit startup error: %O', editError);

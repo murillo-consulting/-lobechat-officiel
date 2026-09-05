@@ -302,15 +302,26 @@ export const deviceRouter = router({
   listHeterogeneousAgentModels: deviceProcedure
     .input(
       z.object({
+        args: z.array(z.string()).optional(),
         command: z.string().optional(),
         cwd: z.string().optional(),
         deviceId: z.string(),
         env: z.record(z.string(), z.string()).optional(),
-        type: z.enum(['opencode', 'pi', 'qoder']),
+        type: z.enum([
+          'codebuddy',
+          'cursor',
+          'droid',
+          'grok-build',
+          'opencode',
+          'pi',
+          'qoder',
+          'trae',
+        ]),
       }),
     )
     .query(async ({ ctx, input }) =>
       deviceGateway.listHeterogeneousAgentModels({
+        args: input.args,
         command: input.command,
         cwd: input.cwd,
         deviceId: input.deviceId,
@@ -601,7 +612,9 @@ export const deviceRouter = router({
   searchProjectFiles: deviceProcedure
     .input(
       z.object({
+        changedOnly: z.boolean().optional(),
         deviceId: z.string(),
+        excludeIgnored: z.boolean().optional(),
         limit: z.number().int().positive().max(500).optional(),
         query: z.string(),
         scope: z.string(),
@@ -609,7 +622,9 @@ export const deviceRouter = router({
     )
     .query(async ({ ctx, input }) => {
       const result = await deviceGateway.searchProjectFiles({
+        changedOnly: input.changedOnly,
         deviceId: input.deviceId,
+        excludeIgnored: input.excludeIgnored,
         limit: input.limit,
         query: input.query,
         scope: input.scope,

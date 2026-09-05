@@ -83,6 +83,12 @@ export default {
   'compare.title': 'Plan Comparison',
   'creditUsageReminder.title':
     '{{percent}} of the subscription credits included in this billing cycle have been used',
+  'creditsChip.available': 'available',
+  'creditsChip.balance': 'Balance {{amount}}',
+  'creditsChip.percent': '{{percent}}%',
+  'creditsChip.title': 'Credits Left',
+  'creditsChip.tooltip': 'Credits left in the current billing cycle',
+  'creditsChip.viewUsage': 'View Usage',
   'compareAllPlans': 'View All Plans',
   'comparePlans': 'View Plans',
   'createSubscriptionError': 'Failed to create subscription',
@@ -274,10 +280,6 @@ export default {
   'credits.topUp.validityInfo': '{{months}} months validity',
   'header.desc': 'Usage and subscription management',
   'header.title': 'Billing',
-  'keyMissMatch.button': 'Restore usage and continue conversation',
-  'keyMissMatch.description':
-    'Due to an occasional system failure, your current subscription usage is temporarily inactive. Please click the button below to restore usage and continue the conversation. If this happens repeatedly, please contact us via email (support@lobehub.com)',
-  'keyMissMatch.title': 'Restore Subscription Usage Now',
   'limitation.chat.budgetReady.action': 'Continue Chatting',
   'limitation.chat.budgetReady.desc': 'Your available credits now cover this request.',
   'limitation.chat.budgetReady.title': 'Credits Ready',
@@ -400,6 +402,9 @@ export default {
   'payDiffPrice': 'Pay Difference',
   'payDiffPriceApprox': 'Approx.',
   'payDiffPriceTip': 'Actual amount subject to payment page',
+  'payment.downgradeFailed.desc':
+    'Failed to schedule your downgrade. Please try again later, or contact us via email if the problem persists',
+  'payment.downgradeFailed.title': 'Downgrade Failed',
   'payment.error.actions.billing': 'Billing Management',
   'payment.error.actions.home': 'Back to Home',
   'payment.error.desc':
@@ -426,7 +431,6 @@ export default {
   'plans.btn.noAction': 'Plan Locked',
   'plans.btn.payment': 'Purchase',
   'plans.btn.paymentDesc': 'Supports credit card / Alipay / WeChat Pay',
-  'plans.btn.paymentDescForZarinpal': 'Supports credit card',
   'plans.btn.soon': 'Coming Soon',
   'plans.changePlan': 'Choose Plan',
   'plans.cloud.history': 'Unlimited conversation history',
@@ -458,6 +462,9 @@ export default {
   'plans.embeddingStorage.title': 'Vector Storage',
   'plans.embeddingStorage.tooltip':
     'One document page (1000-1500 characters) generates approximately 1 vector entry. (Estimated using OpenAI Embeddings, may vary by model)',
+  'plans.artifactHosting.deployments': 'Up to {{count}} active Artifact sites',
+  'plans.artifactHosting.siteSize': 'Up to {{size}} per published site',
+  'plans.artifactHosting.title': 'Artifact Hosting',
   'plans.features.agents': 'Curated Agent Market',
   'plans.features.ceAgents': 'Community Agent Market',
   'plans.features.cePlugins': 'Community Plugin Market',
@@ -545,8 +552,8 @@ export default {
   'plans.target': 'Target Plan',
   'plans.unlimited': 'Unlimited',
   'plansModal.artifactDeploymentLimit.desc':
-    'Your public Artifact deployment limit has been reached. Upgrade your plan to publish more projects.',
-  'plansModal.artifactDeploymentLimit.title': 'Publish more Artifacts',
+    'Your Artifact hosting capacity has been reached. Upgrade to increase active deployments and per-site size limits.',
+  'plansModal.artifactDeploymentLimit.title': 'Increase Artifact hosting capacity',
   'plansModal.creditLimit.desc':
     'Upgrade your plan to unlock more monthly credits and keep working without interruption.',
   'plansModal.creditLimit.title': 'You’re out of credits',
@@ -742,11 +749,4 @@ export default {
   'usage.storage.embeddings.used': 'Vector Storage',
   'usage.storage.file.used': 'File Usage',
   'usage.remaining': 'Remaining',
-  'zarinpal.infoModal.desc':
-    'Due to policy requirements, please complete the following personal information before placing an order:',
-  'zarinpal.infoModal.phone.label': 'Phone Number',
-  'zarinpal.infoModal.phone.placeholder': 'Please enter phone number',
-  'zarinpal.infoModal.phone.rule': 'Please enter a valid phone number',
-  'zarinpal.infoModal.submit': 'Purchase',
-  'zarinpal.infoModal.title': 'Fill in Required Information',
 };

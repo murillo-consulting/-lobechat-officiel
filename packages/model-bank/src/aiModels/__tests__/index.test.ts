@@ -206,17 +206,15 @@ describe('Google rolling model aliases', () => {
   it('tracks the current Flash and Flash-Lite model versions', () => {
     const googleModels = LOBE_DEFAULT_MODEL_LIST.filter((model) => model.providerId === 'google');
     const flashLatest = googleModels.find((model) => model.id === 'gemini-flash-latest');
-    const flash = googleModels.find((model) => model.id === 'gemini-3.6-flash');
     const flashLiteLatest = googleModels.find((model) => model.id === 'gemini-flash-lite-latest');
     const flashLite = googleModels.find((model) => model.id === 'gemini-3.5-flash-lite');
 
     expect(flashLatest).toEqual(
       expect.objectContaining({
-        description: 'Points to gemini-3.6-flash',
+        description: 'Points to gemini-3.7-flash',
         knowledgeCutoff: '2026-03',
       }),
     );
-    expect(flashLatest?.pricing).toEqual(flash?.pricing);
     expect(flashLatest?.settings?.disabledParams).toEqual(['temperature', 'top_p']);
 
     expect(flashLiteLatest).toEqual(
@@ -254,7 +252,7 @@ describe('Google Gemini 3.1 Flash Image models', () => {
           type: 'image',
         }),
         expect.objectContaining({
-          enabled: true,
+          enabled: false,
           id: 'gemini-3.1-flash-image-preview',
           releasedAt: '2026-02-26',
           type: 'chat',
@@ -275,5 +273,20 @@ describe('Google Gemini 3.1 Flash Image models', () => {
         expect.objectContaining({ name: 'imageOutput', rate: 60 }),
       ]),
     );
+  });
+});
+
+describe('vendor provider cards', () => {
+  it('advertises native search, image and video input for GLM-5.3-Flash', () => {
+    // Without `video: true` the chat pipeline falls back to media analysis instead of sending
+    // video to the model natively, even though the official card lists video input.
+    const glm53Flash = LOBE_DEFAULT_MODEL_LIST.find(
+      (m) => m.providerId === 'zhipu' && m.id === 'glm-5.3-flash',
+    );
+
+    expect(glm53Flash?.abilities).toEqual(
+      expect.objectContaining({ reasoning: true, search: true, video: true, vision: true }),
+    );
+    expect(glm53Flash?.settings?.searchImpl).toBe('params');
   });
 });

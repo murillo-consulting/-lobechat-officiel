@@ -305,12 +305,19 @@ export default {
 
   'cmdk.video': 'AI Video',
 
+  'betaFeedback.collapse': 'Collapse',
   'betaFeedback.desc':
     'Workspace is in beta. Report issues, request features, or compare notes with other beta users.',
   'betaFeedback.discord.action': 'Open Discord',
   'betaFeedback.discord.desc': 'Scan with your phone camera to join.',
   'betaFeedback.discord.title': 'Discord',
+  'betaFeedback.dismiss': "Don't show again",
+  'betaFeedback.promoBanner':
+    'Join the group chat and share issues or suggestions for a chance to earn free trial credits.',
+  'betaFeedback.promoTooltip': 'Join the group chat for a chance to earn free credits',
   'betaFeedback.title': 'Workspace beta feedback',
+  'betaFeedback.waitlistPromo': 'Join the Workspace beta and get $5 in credits',
+  'betaFeedback.waitlistTitle': 'Workspace beta application',
   'betaFeedback.wechat.desc': 'Scan with WeChat to join the group.',
   'betaFeedback.wechat.title': 'WeChat group',
 
@@ -468,8 +475,11 @@ export default {
   'layoutInitializing': 'Loading layout...',
   'legal': 'Legal Disclaimer',
   'loading': 'Loading...',
+  'stillLoading': 'Still loading...',
   'mail.business': 'Business Cooperation',
   'mail.support': 'Email Support',
+  'deleteHistoryMigrating':
+    'Chat history is still migrating. It can be deleted once the migration finishes — please try again in a few minutes.',
   'deleteSharedOwnerOnly':
     "Only a workspace owner can delete this — it carries other members' conversations",
   'manageOnlyCreator': 'Only the creator or a workspace owner can do this',
@@ -495,9 +505,12 @@ export default {
   'navPanel.show': 'Show',
   'navPanel.visible': 'Visible',
   'navPanel.searchAgent': 'Search Agent...',
+  'navPanel.searchProject': 'Search projects...',
   'navPanel.viewAllAgents': 'View all',
   'navPanel.searchRecent': 'Search Recent...',
   'navPanel.searchResultEmpty': 'No search results found',
+  'navPanel.switcherAll': 'All',
+  'navPanel.switcherRecent': 'Recent',
   'new': 'New',
   'pro': 'Pro',
   'noContent': 'No content',
@@ -607,6 +620,18 @@ export default {
   'tab.setting': 'Settings',
   'tab.tasks': 'Tasks',
   'tab.video': 'Video',
+  'taskDock.activeOf': '{{active}} running · {{total}} total',
+  'taskDock.cancelAll': 'Cancel all',
+  'taskDock.collapse': 'Collapse',
+  'taskDock.expand': 'Expand',
+  'taskDock.group.publish': 'Publishing',
+  'taskDock.group.upload': 'Uploads',
+  'taskDock.open': 'Open',
+  'taskDock.status.cancelled': 'Cancelled',
+  'taskDock.status.error': 'Some tasks need attention',
+  'taskDock.status.running': 'In progress',
+  'taskDock.status.success': 'All done',
+  'taskDock.totalCount': '{{count}} items',
   'telemetry.allow': 'Allow',
   'telemetry.deny': 'Deny',
   'telemetry.desc':

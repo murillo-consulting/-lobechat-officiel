@@ -1,8 +1,8 @@
 'use client';
 
 import { type FormGroupItemType } from '@lobehub/ui';
-import { Form, Icon, Skeleton, Tooltip } from '@lobehub/ui';
-import { Select } from '@lobehub/ui/base-ui';
+import { Form, Icon } from '@lobehub/ui';
+import { Select, Skeleton } from '@lobehub/ui/base-ui';
 import isEqual from 'fast-deep-equal';
 import { Loader2Icon } from 'lucide-react';
 import { memo, useState } from 'react';
@@ -21,24 +21,22 @@ const OpenAI = memo(() => {
   const { t } = useTranslation('setting');
   const { allowed: canManageServiceModel, reason } = usePermission('manage_settings');
   const [form] = Form.useForm();
-  const { tts } = useUserStore(settingsSelectors.currentSettings, isEqual);
+  const tts = useUserStore(settingsSelectors.currentTTS, isEqual);
   const [setSettings, isUserStateInit] = useUserStore((s) => [s.setSettings, s.isUserStateInit]);
   const [loading, setLoading] = useState(false);
 
-  if (!isUserStateInit) return <Skeleton active paragraph={{ rows: 5 }} title={false} />;
+  if (!isUserStateInit) return <Skeleton.Text rows={5} />;
 
   const openai: FormGroupItemType = {
     children: [
       {
         className: serviceModelFormStyles.centeredLabel,
         children: (
-          <Tooltip title={reason}>
-            <Select
-              disabled={!canManageServiceModel}
-              options={opeanaiTTSOptions}
-              style={{ width: 'min(100%, 448px)' }}
-            />
-          </Tooltip>
+          <Select
+            disabled={!canManageServiceModel}
+            options={opeanaiTTSOptions}
+            style={{ width: 'min(100%, 448px)' }}
+          />
         ),
         label: (
           <SettingsSearchAnchor id={'service-model-tts'}>
@@ -46,6 +44,7 @@ const OpenAI = memo(() => {
           </SettingsSearchAnchor>
         ),
         name: ['openAI', 'ttsModel'],
+        tooltip: reason,
       },
     ],
     extra: loading && <Icon spin icon={Loader2Icon} size={16} style={{ opacity: 0.5 }} />,
