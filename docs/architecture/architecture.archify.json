@@ -1,0 +1,19 @@
+{
+  "schema_version":1,
+  "diagram_type":"architecture",
+  "meta":{"title":"LobeHub — socle Compose","quality_profile":"showcase","viewBox":[1100,650]},
+  "components":[
+    {"id":"browser","type":"external","label":"Navigateur","sublabel":"Port publié du service lobe","pos":[50,280],"size":[220,80]},
+    {"id":"lobe","type":"backend","label":"LobeHub","sublabel":"Service applicatif","pos":[440,280],"size":[220,80]},
+    {"id":"postgres","type":"database","label":"PostgreSQL","sublabel":"Persistance applicative","pos":[830,280],"size":[220,80]},
+    {"id":"casdoor","type":"security","label":"Casdoor","sublabel":"Identité OIDC","pos":[440,60],"size":[220,80]},
+    {"id":"minio","type":"database","label":"MinIO","sublabel":"Objets compatibles S3","pos":[440,500],"size":[220,80]}
+  ],
+  "connections":[
+    {"from":"browser","to":"lobe","label":"Web"},
+    {"from":"lobe","to":"postgres","label":"SQL"},
+    {"from":"lobe","to":"casdoor","label":"OIDC"},
+    {"from":"lobe","to":"minio","label":"S3","labelDy":40}
+  ],
+  "cards":[{"dot":"amber","title":"Périmètre","items":["Socle déclaré dans docker-compose/production/grafana.","SearXNG et la chaîne OpenTelemetry/Grafana sont hors de cette vue.","Cette configuration ne prouve pas le déploiement du poste."]}]
+}

@@ -1,0 +1,50 @@
+{
+  "archify_revision": "10722002bb8777ecb639d93c49586fae4adf3ae4",
+  "archify_version": "2.17.0-dev.1",
+  "source_revision": "7018c9287b01d9be82c5eeba8a90196cf8f827aa",
+  "diagram_type": "architecture",
+  "specification": {
+    "sha256": "79199b86695566a7fe8b51ce7e85bea340926c1f988a3fe88559c55833565c90",
+    "bytes": 1283
+  },
+  "artifact": {
+    "sha256": "1fe50abca7aeee5c545fbe9b9143d314904011b81d858a66163268e8c57d7a9e",
+    "bytes": 798756
+  },
+  "validation": {
+    "checksPassed": 9,
+    "checkCount": 9,
+    "compositionProfile": "showcase",
+    "compositionStatus": "pass",
+    "errors": 0,
+    "warnings": 0
+  },
+  "browser_evidence": "passed",
+  "browser_viewports": [
+    [
+      1440,
+      900
+    ],
+    [
+      1600,
+      1000
+    ],
+    [
+      1920,
+      1080
+    ],
+    [
+      2048,
+      1320
+    ]
+  ],
+  "browser_themes": [
+    "light",
+    "dark"
+  ],
+  "perceptual_review": "passed",
+  "preview_sha256": "743d147cb0c1e4d017fc4cf9e418d478f83d603f5ef6038595b9842be51023dc",
+  "correction_rounds": 1,
+  "perceptual_review_scope": "Rendered PNG evidence, 1440x900 and 2048x1320, light and dark; no overlap or clipping; browser interactions beyond visual-check not separately exercised.",
+  "repository_check": "bun run check attempted: unavailable remark dependency in isolated clone; application suite not run for documentation-only change"
+}
